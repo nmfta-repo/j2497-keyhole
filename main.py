@@ -30,11 +30,12 @@ import j2497_keyhole
 
 FL2K_FULL_SCALE = 127
 FL2K_SAMP_RATE = 7777777  # The lowest FL2K sample rate that it will support
+
 # Some zeros to 'warm-up' the fl2k transmitter before sending the J2497 waveform, otherwise
 # waveform is corrupted by fl2k transmit
-FL2K_WARMUP_SIZE = int(FL2K_SAMP_RATE / 128.0)
+FL2K_WARMUP_SIZE = FL2K_SAMP_RATE * 4
 # Some zeros to cool-down the fl2k transmitter, otherwise the waveform is corrupted by fl2k transmit
-FL2K_COOLDOWN_SIZE = FL2K_SAMP_RATE
+FL2K_COOLDOWN_SIZE = FL2K_SAMP_RATE * 4
 
 REPEAT = 4096
 
