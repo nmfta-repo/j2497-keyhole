@@ -37,7 +37,6 @@ FL2K_WARMUP_SIZE = FL2K_SAMP_RATE * 4
 # Some zeros to cool-down the fl2k transmitter, otherwise the waveform is corrupted by fl2k transmit
 FL2K_COOLDOWN_SIZE = FL2K_SAMP_RATE * 4
 
-REPEAT = 4096
 
 
 def prep_signal(signal: np.ndarray):
@@ -46,27 +45,39 @@ def prep_signal(signal: np.ndarray):
     return out
 
 
+REPEAT = 50
+RX_MIN_WAIT_US=15_000  # wait time to use as minimum between fast-as-possible messages sent
+FL2K_WRITE_CHUNK_SIZE = 4096  # size of bytes to write at a time to the FL2K subprocess
 if __name__ == '__main__':
     warmup = np.zeros(FL2K_WARMUP_SIZE, np.int8).tobytes()
     cooldown = np.zeros(FL2K_COOLDOWN_SIZE, np.int8).tobytes()
-    doors_n_keyholes = [prep_signal(x) for x in
-                        j2497_keyhole.generate(sample_rate=FL2K_SAMP_RATE, calibration_mode=False)]
+    chirps_chain = itertools.chain(
+        j2497_keyhole.generate(sample_rate=FL2K_SAMP_RATE, calibration_mode=False),
+    )
 
-    # NB: you will probably want to run this once per boot to increase the USB buffers:
-    # sudo sh -c 'echo 1000 > /sys/module/usbcore/parameters/usbfs_memory_mb'
+    # NB: you will need to run this once per boot to increase the USB buffers:
+    #
+    #     sudo sh -c 'echo 1000 > /sys/module/usbcore/parameters/usbfs_memory_mb'
+    #
     p = subprocess.Popen(['fl2k_file', '-s', str(FL2K_SAMP_RATE), '-r', '1', '-'],
                          stdin=subprocess.PIPE)
     t = p.stdin
     t.write(warmup)
-    for i in range(0, REPEAT):
-        for dnk in doors_n_keyholes:
-            try:
-                t.write(dnk)
-            except IOError as e:
-                if e.errno == errno.EPIPE or e.errno == errno.EINVAL:
-                    break
-                else:
-                    raise
+    sys.stderr.write('warmed-up; please expect at least one "Underflow!" message\n')
+
+    repeating_chirps = itertools.chain.from_iterable(itertools.repeat(tuple(chirps_chain), REPEAT))
+    for chirps in repeating_chirps:
+        l = len(chirps)
+        try:
+            for i in range(0, l, FL2K_WRITE_CHUNK_SIZE):
+                t.write(prep_signal(chirps[i: i + FL2K_WRITE_CHUNK_SIZE if i + FL2K_WRITE_CHUNK_SIZE < l else l - 1]))
+        except IOError as e:
+            if e.errno == errno.EPIPE or e.errno == errno.EINVAL:
+                break
+            else:
+                raise
+
+    sys.stderr.write('cooldown\n')
     t.write(cooldown)
 
     p.stdin.close()
