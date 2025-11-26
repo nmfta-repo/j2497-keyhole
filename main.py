@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import binascii
+import itertools
+import sys
 
 # MIT License
 #
@@ -27,6 +30,7 @@ import subprocess
 import errno
 
 import j2497_keyhole
+from j2497_common import get_payload_bits, get_payload_chirps, generate_signal
 
 FL2K_FULL_SCALE = 127
 FL2K_SAMP_RATE = 7777777  # The lowest FL2K sample rate that it will support
@@ -38,12 +42,10 @@ FL2K_WARMUP_SIZE = FL2K_SAMP_RATE * 4
 FL2K_COOLDOWN_SIZE = FL2K_SAMP_RATE * 4
 
 
-
 def prep_signal(signal: np.ndarray):
     out = signal * FL2K_FULL_SCALE
     out = out.astype('int8').tobytes()
     return out
-
 
 REPEAT = 50
 RX_MIN_WAIT_US=15_000  # wait time to use as minimum between fast-as-possible messages sent
@@ -55,22 +57,24 @@ if __name__ == '__main__':
         j2497_keyhole.generate(sample_rate=FL2K_SAMP_RATE, calibration_mode=False),
     )
 
-    # NB: you will need to run this once per boot to increase the USB buffers:
+    # NB: on Linux you will need to run this once per boot to increase the USB buffers:
     #
     #     sudo sh -c 'echo 1000 > /sys/module/usbcore/parameters/usbfs_memory_mb'
     #
     p = subprocess.Popen(['fl2k_file', '-s', str(FL2K_SAMP_RATE), '-r', '1', '-'],
-                         stdin=subprocess.PIPE)
-    t = p.stdin
-    t.write(warmup)
-    sys.stderr.write('warmed-up; please expect at least one "Underflow!" message\n')
+                         stdin=subprocess.PIPE,
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+
+    p.stdin.write(warmup)
+    sys.stderr.write('warmed-up; please expect at least one "Underflow!" message on Linux\n')
 
     repeating_chirps = itertools.chain.from_iterable(itertools.repeat(tuple(chirps_chain), REPEAT))
     for chirps in repeating_chirps:
         l = len(chirps)
         try:
             for i in range(0, l, FL2K_WRITE_CHUNK_SIZE):
-                t.write(prep_signal(chirps[i: i + FL2K_WRITE_CHUNK_SIZE if i + FL2K_WRITE_CHUNK_SIZE < l else l - 1]))
+                p.stdin.write(prep_signal(chirps[i: i + FL2K_WRITE_CHUNK_SIZE if i + FL2K_WRITE_CHUNK_SIZE < l else l - 1]))
         except IOError as e:
             if e.errno == errno.EPIPE or e.errno == errno.EINVAL:
                 break
@@ -78,8 +82,9 @@ if __name__ == '__main__':
                 raise
 
     sys.stderr.write('cooldown\n')
-    t.write(cooldown)
-
+    p.stdin.write(cooldown)
+    p.stdin.flush()
     p.stdin.close()
+
     p.kill()
     p.wait()
