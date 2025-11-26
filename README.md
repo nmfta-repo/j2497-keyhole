@@ -28,11 +28,11 @@ The mitigation here takes the form of a signal which can be transmitted on a J24
     storage as well.
     [...]
 
-The `main.py` file contains an example of transmitting the keyhole mitigation signal using cheap FL2K VGA adapters as transmitters (SDRs) by running and writing-to the `fl2k_file` executable from the [osmo-fl2k project](https://gitea.osmocom.org/sdr/osmo-fl2k/).
+The `main.py` file contains an example of transmitting the keyhole mitigation signal using cheap FL2K VGA adapters as transmitters (SDRs) by running and writing-to the `fl2k_file` executable in `PATH` from the [osmo-fl2k project](https://gitea.osmocom.org/sdr/osmo-fl2k/). This will work both on Linux and Windows.
 
 ## Installation
 
-1. compile and install [osmo-fl2k](https://gitea.osmocom.org/sdr/osmo-fl2k/) following the project instructions
+1. compile and install [osmo-fl2k](https://gitea.osmocom.org/sdr/osmo-fl2k/) following the project instructions , or install from pre-built binaries
 2. install this project's python dependencies with `pip3 install -r requirements.txt`
 3. run `main.py` to transmit the keyhole mitigation on a connected FL2K adapter
 
